@@ -7,7 +7,7 @@ import hashlib
 MIN_NUM_PACKETS = 2     # + filename | + number of packets | + STOP
 
 TARGET_IP = "192.168.30.25"
-LOCAL_IP = "192.168.30.38"
+LOCAL_IP = "192.168.30.25"
 
 TARGET_PORT = 4023
 LOCAL_PORT = 7110
@@ -112,11 +112,11 @@ def send_file(file_name, buffer_length):
             packet_counter += 1
             buffer = f.read(buffer_length - len(str(packet_counter)))
 
-        send_bytes(str(hash_code).encode(), packet_counter)
+        send_bytes(str(hash_code.hexdigest()).encode(), packet_counter)
         print(hash_code.hexdigest())
         #send_bytes("STOP".encode(), packet_counter)
 
 
 if __name__ == "__main__":
-    file = "test2.bmp"
+    file = "inp/golang.png"
     send_file(file, BUFFER_LEN)

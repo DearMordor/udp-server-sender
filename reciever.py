@@ -1,9 +1,14 @@
+import hashlib
 import socket
 import zlib
 
 localIP = "192.168.30.25"
 localPort = 4023
 bufferSize = 1024
+
+
+def get_hash_code(data):
+    return data.decode()
 
 
 class Server:
@@ -23,6 +28,7 @@ class Server:
         self.amount_of_packages = -1
         self.counter_from_sender = 0
         self.crc32 = 0
+        self.hash_code = hashlib.md5()
 
     def bind_server(self):
         """Binds server with sender via sockets"""
@@ -54,16 +60,14 @@ class Server:
         while True:
             data, addr = self.udp_server_socket.recvfrom(self.buffer_size)
             print('received from: ', addr, 'data: package_' + str(self.count))
-            data = self.read_str_char_by_char(data)
+            data = self.parse_data(data)
             print(data)
 
             if self.count == 0:
                 self.get_filename(data)
                 print("Filename got success: " + self.filename)
 
-                if self.check_packages(self.counter_from_sender) == 0 or not self.control_crc(data):
-                    if not self.control_crc(data):
-                        print("WHY IS FALSE ")
+                if self.control_packages_and_crc(data):
                     print("Iteration was continued ")
                     continue
 
@@ -71,18 +75,28 @@ class Server:
                 self.get_size(data)
                 print("Size got success: " + str(self.amount_of_packages))
 
-                if self.check_packages(self.counter_from_sender) == 0 or not self.control_crc(data):
-                    if not self.control_crc(data):
-                        print("WHY IS FALSE ")
+                if self.control_packages_and_crc(data):
                     print("Iteration was continued ")
                     continue
             else:
                 if self.check_packages(self.counter_from_sender) != 0 and self.control_crc(data) == True:
-                    print("All data was concatantied with just data")
+                    print("All data was concatenated with just data")
+                    self.hash_code.update(data)
                     self.all_data += data
 
             if self.count == self.amount_of_packages:
                 break
+
+        data, addr = self.udp_server_socket.recvfrom(self.buffer_size)
+        data = self.parse_data(data)
+        if self.check_packages(self.counter_from_sender) != 0 and self.control_crc(data) == True:
+            print(data)
+            print("Got a hashcode from " + str(addr))
+            hash_from_sender = get_hash_code(data)
+            print("Hash from sender: " + hash_from_sender)
+            print("My hash " + str(self.hash_code.hexdigest()))
+            if self.compare_hash_codes(hash_from_sender):
+                print("Hash codes are equal!")
 
     def get_filename(self, data):
         self.filename = data.decode("utf-8")
@@ -101,34 +115,46 @@ class Server:
     def send_bytes(self, data):
         self.udp_server_socket.sendto(data, ("192.168.30.38", 7110))
 
-    def read_str_char_by_char(self, data):
+    def parse_data(self, data):
         """Reads input data up to char '|' then return data without chars before the char '|' """
+        data = self.get_package_counter_from_sender(data)
+
+        return self.get_src_from_sender(data)
+
+    def control_crc(self, data):
+        print("My crc " + str(zlib.crc32(data)) + "\nSender's crc: " + str(self.crc32))
+        self.crc32 = int(self.crc32)
+        if self.crc32 == zlib.crc32(data):
+            print("Crc is fine")
+        return self.crc32 == zlib.crc32(data)
+
+    def control_packages_and_crc(self, data):
+        return self.check_packages(self.counter_from_sender) == 0 or not self.control_crc(data)
+
+    def get_package_counter_from_sender(self, data):
         i = 0
         num = ""
-        crc = ""
-        while data[i] != 124:
+        while data[i] != 124:  # 124 means in ASCII "|"
             num += chr(data[i])
             i += 1
 
         self.counter_from_sender = int(num)
         print("Counter from sender is " + str(self.counter_from_sender))
-
-        # we loop again to get src32
         i += 1
-        while data[i] != 124:
+        return data[i:]
+
+    def get_src_from_sender(self, data):
+        i = 0
+        crc = ""
+        while data[i] != 124:  # 124 means in ASCII "|"
             crc += chr(data[i])
             i += 1
         i += 1
         self.crc32 = int(crc)
         return data[i:]
 
-    def control_crc(self, data):
-        print("My crc " + str(zlib.crc32(data)) + "\nSender's crc: " + str(self.crc32))
-        self.crc32 = int(self.crc32)
-        print(" My crc " + str(type(self.crc32)) + " Sender type " + str(type(zlib.crc32(data))))
-        if self.crc32 == zlib.crc32(data):
-            print("Crc is fine")
-        return self.crc32 == zlib.crc32(data)
+    def compare_hash_codes(self, hash_code_from_sender):
+        return hash_code_from_sender == self.hash_code.hexdigest()
 
 
 # Start

@@ -23,7 +23,7 @@ class Server:
         self.buffer_size = buffer_size
         self.filename = ''
         self.udp_server_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-        self.count = 0
+        self.count = 1
         self.all_data = b''
         self.amount_of_packages = -1
         self.counter_from_sender = 0
@@ -38,19 +38,18 @@ class Server:
 
     def check_packages(self, count_from_sender):
         """Checks a current count from sender and compares with local count"""
-        self.count += 1
         if count_from_sender == self.count:
             self.send_bytes("1".encode())
             print("1 was sent to the client")
+            self.count += 1
             return 1
         else:
             if count_from_sender < self.count:
-                self.send_bytes("1".encode())
-                print("1 was sent to the client")
-                return 1
+                self.send_bytes("0".encode())
+                print("0 was sent to the client")
+                return 0
             self.send_bytes("0".encode())
             print("0 was sent to the client")
-            self.count -= 1
             if self.count < 0:
                 self.count = 0
             return 0
@@ -61,9 +60,8 @@ class Server:
             data, addr = self.udp_server_socket.recvfrom(self.buffer_size)
             print('received from: ', addr, 'data: package_' + str(self.count))
             data = self.parse_data(data)
-            print(data)
 
-            if self.count == 0:
+            if self.count == 1:
                 self.get_filename(data)
                 print("Filename got success: " + self.filename)
 
@@ -71,7 +69,7 @@ class Server:
                     print("Iteration was continued ")
                     continue
 
-            elif self.count == 1:  # For future, check if data is number
+            elif self.count == 2:  # For future, check if data is number
                 self.get_size(data)
                 print("Size got success: " + str(self.amount_of_packages))
 
@@ -79,24 +77,23 @@ class Server:
                     print("Iteration was continued ")
                     continue
             else:
+                print("Self count " + str(self.count) + " My count" + str(self.amount_of_packages))
+                if self.count == self.amount_of_packages:
+                    print("GONNA CATCH HASH DATA")
+                    if self.check_packages(self.counter_from_sender) != 0 and self.control_crc(data) == True:
+                        # print(data)
+                        print("Got a hashcode from " + str(addr))
+                        hash_from_sender = get_hash_code(data)
+                        print("Hash from sender: " + hash_from_sender)
+                        print("My hash " + str(self.hash_code.hexdigest()))
+                        if self.compare_hash_codes(hash_from_sender):
+                            print("Hash codes are equal!")
+                    break
+
                 if self.check_packages(self.counter_from_sender) != 0 and self.control_crc(data) == True:
-                    print("All data was concatenated with just data")
+                    print("All data was concatenated with just data + \n")
                     self.hash_code.update(data)
                     self.all_data += data
-
-            if self.count == self.amount_of_packages:
-                break
-
-        data, addr = self.udp_server_socket.recvfrom(self.buffer_size)
-        data = self.parse_data(data)
-        if self.check_packages(self.counter_from_sender) != 0 and self.control_crc(data) == True:
-            print(data)
-            print("Got a hashcode from " + str(addr))
-            hash_from_sender = get_hash_code(data)
-            print("Hash from sender: " + hash_from_sender)
-            print("My hash " + str(self.hash_code.hexdigest()))
-            if self.compare_hash_codes(hash_from_sender):
-                print("Hash codes are equal!")
 
     def get_filename(self, data):
         self.filename = data.decode("utf-8")
@@ -122,7 +119,6 @@ class Server:
         return self.get_src_from_sender(data)
 
     def control_crc(self, data):
-        print("My crc " + str(zlib.crc32(data)) + "\nSender's crc: " + str(self.crc32))
         self.crc32 = int(self.crc32)
         if self.crc32 == zlib.crc32(data):
             print("Crc is fine")

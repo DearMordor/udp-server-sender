@@ -4,10 +4,10 @@ from os import stat
 from zlib import crc32
 import hashlib
 
-MIN_NUM_PACKETS = 2     # + filename | + number of packets | + STOP
+MIN_NUM_PACKETS = 3     # + filename | + number of packets | + hashcode
 
 TARGET_IP = "192.168.30.25"
-LOCAL_IP = "192.168.30.25"
+LOCAL_IP = "192.168.30.38"
 
 TARGET_PORT = 4023
 LOCAL_PORT = 7110
@@ -55,12 +55,10 @@ def send_bytes(buffer, packet_counter):
     """
     packet = build_packet(buffer, packet_counter)
     answer_manager = Manager().list()
-    answer = 1
-    SOCK.sendto(packet, (TARGET_IP, TARGET_PORT))
+    answer = 0
 
     while answer != 1:  # Waits for confirmation
         print("Sending packet " + str(int(packet_counter)) + " of size " + str(len(packet)) + ".")
-        #print(chr(bytes_to_send[:15]))
         SOCK.sendto(packet, (TARGET_IP, TARGET_PORT))
         answer = wait_for_answer(answer_manager)
 
@@ -82,7 +80,7 @@ def send_file_info(file_name, packet_counter, buffer_lenght):
     """
     Sends the necessary file information.
     -> file name
-    -> number of packets (with predetermined buffer length 1024)
+    -> number of packets (with predetermined buffer length 1012)
     """
     n_packets = calculate_amount_of_packets(file_name, buffer_lenght)
     print("Total packets to send " + str(n_packets) + ".\n")
@@ -118,5 +116,7 @@ def send_file(file_name, buffer_length):
 
 
 if __name__ == "__main__":
-    file = "inp/golang.png"
+    file = "inp/sample_640×426.bmp"
     send_file(file, BUFFER_LEN)
+
+# Test gitlab 2

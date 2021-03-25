@@ -120,3 +120,5 @@ def send_file(file_name, buffer_length):
 if __name__ == "__main__":
     file = "inp/golang.png"
     send_file(file, BUFFER_LEN)
+
+# Test gitlab

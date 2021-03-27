@@ -2,7 +2,7 @@ import hashlib
 import socket
 import zlib
 
-localIP = "192.168.30.25"
+localIP = "192.168.30.38"
 localPort = 4023
 bufferSize = 1024
 
@@ -40,16 +40,16 @@ class Server:
         """Checks a current count from sender and compares with local count"""
         if count_from_sender == self.count:
             self.send_bytes("1".encode())
-            print("1 was sent to the client")
+            print("1 was sent to the client\n")
             self.count += 1
             return 1
         else:
             if count_from_sender < self.count:
-                self.send_bytes("0".encode())
-                print("0 was sent to the client")
+                self.send_bytes("1".encode())
+                print("0 was sent to the client\n")
                 return 0
             self.send_bytes("0".encode())
-            print("0 was sent to the client")
+            print("0 was sent to the client\n")
             if self.count < 0:
                 self.count = 0
             return 0
@@ -77,12 +77,12 @@ class Server:
                     print("Iteration was continued ")
                     continue
             else:
-                print("Self count " + str(self.count) + " My count" + str(self.amount_of_packages))
+                #print("Self count " + str(self.count) + " My count" + str(self.amount_of_packages))
                 if self.count == self.amount_of_packages:
-                    print("GONNA CATCH HASH DATA")
+                    #print("GONNA CATCH HASH DATA")
                     if self.check_packages(self.counter_from_sender) != 0 and self.control_crc(data) == True:
                         # print(data)
-                        print("Got a hashcode from " + str(addr))
+                        #print("Got a hashcode from " + str(addr))
                         hash_from_sender = get_hash_code(data)
                         print("Hash from sender: " + hash_from_sender)
                         print("My hash " + str(self.hash_code.hexdigest()))
@@ -91,7 +91,7 @@ class Server:
                     break
 
                 if self.check_packages(self.counter_from_sender) != 0 and self.control_crc(data) == True:
-                    print("All data was concatenated with just data + \n")
+                    #print("All data was concatenated with just data + \n")
                     self.hash_code.update(data)
                     self.all_data += data
 
@@ -120,8 +120,8 @@ class Server:
 
     def control_crc(self, data):
         self.crc32 = int(self.crc32)
-        if self.crc32 == zlib.crc32(data):
-            print("Crc is fine")
+        #if self.crc32 == zlib.crc32(data):
+            #print("Crc is fine")
         return self.crc32 == zlib.crc32(data)
 
     def control_packages_and_crc(self, data):
@@ -135,7 +135,7 @@ class Server:
             i += 1
 
         self.counter_from_sender = int(num)
-        print("Counter from sender is " + str(self.counter_from_sender))
+        #print("Counter from sender is " + str(self.counter_from_sender))
         i += 1
         return data[i:]
 

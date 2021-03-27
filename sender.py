@@ -6,13 +6,13 @@ import hashlib
 
 MIN_NUM_PACKETS = 3     # + filename | + number of packets | + hashcode
 
-TARGET_IP = "192.168.30.25"
+TARGET_IP = "192.168.30.38"
 LOCAL_IP = "192.168.30.38"
 
-TARGET_PORT = 4023
+TARGET_PORT = 4024
 LOCAL_PORT = 7110
 BUFFER_LEN = 1012
-TIMEOUT = 0.3
+TIMEOUT = 1
 SEPARATOR = '|'
 
 SOCK = socket(family=AF_INET, type=SOCK_DGRAM)
@@ -116,7 +116,9 @@ def send_file(file_name, buffer_length):
 
 
 if __name__ == "__main__":
-    file = "inp/sample_640×426.bmp"
+    # file = "sample_640×426.bmp"
+    file = "inp/speed.bmp"
+
     send_file(file, BUFFER_LEN)
 
 # Test gitlab 2

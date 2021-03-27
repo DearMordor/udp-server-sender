@@ -1,18 +1,29 @@
 from socket import *
-from multiprocessing import Manager, Process, freeze_support
 from os import stat
 from zlib import crc32
 import hashlib
 
-MIN_NUM_PACKETS = 3     # + filename | + number of packets | + hashcode
+MIN_NUM_PACKETS = 3  # + filename | + number of packets | + hashcode
+BAD = b"BAD"
+GOOD = b"GOOD"
 
-TARGET_IP = "192.168.30.38"
+# NetDerper
+# TARGET_IP = "192.168.30.38"
+# LOCAL_IP = "192.168.30.38"
+#
+# TARGET_PORT = 4024
+# LOCAL_PORT = 4025
+
+# Normal
+TARGET_IP = "192.168.30.10"
 LOCAL_IP = "192.168.30.38"
 
 TARGET_PORT = 4023
 LOCAL_PORT = 7110
+
+
 BUFFER_LEN = 1012
-TIMEOUT = 1
+TIMEOUT = 0.3
 SEPARATOR = '|'
 
 SOCK = socket(family=AF_INET, type=SOCK_DGRAM)
@@ -20,21 +31,56 @@ SOCK.bind((LOCAL_IP, LOCAL_PORT))
 SOCK.settimeout(TIMEOUT)
 
 
-def wait_for_answer():
+def get_separator_index(data):
     """
-    Waits for servers confirmation that the data have been received correctly.
+    Goes through data and returns the index of the SEPARATOR.
     """
-    try:
-        answer = SOCK.recvfrom(1)
-    except timeout:
-        answer = 0
+    iterator = 0
+    for char in data:
+        if char == SEPARATOR:
+            break
+        iterator += 1
+    return iterator
 
-    if answer == 0:
-        print("Confirmation timeout.\n")
-        return answer
-    else:
-        print("Received " + str(int(answer[0])) + " from address " + str(answer[1]) + ".\n")
-        return int(answer[0])
+
+def get_crc_check(acknowledgement, received_crc):
+    """
+    Compares the received crc code with the crc created with acknowledgement.
+    """
+    if crc32(acknowledgement) == received_crc:
+        if acknowledgement == GOOD:
+            print("Received GOOD, sending next packet.\n")
+            return GOOD
+        if acknowledgement == BAD:
+            print("Received BAD, sending packet again.\n")
+            return BAD
+
+    print("Received corrupted data (" + acknowledgement + "), sending packet again.\n")
+    return BAD
+
+
+def get_answer():
+    """
+    Gets and decodes the acknowledgement packet from server.
+    """
+    # Waits for a response
+    try:
+        answer = SOCK.recvfrom(1000)
+    except timeout:
+        print("Confirmation timeout, sending packet again.\n")
+        return BAD
+
+    # Tries to decode data to get the acknowledgement
+    try:
+        received_data = answer[0].decode()
+        separator_idx = get_separator_index(received_data)
+        ack = answer[0][separator_idx + 1:]
+        crc = int(answer[0][:separator_idx])
+
+        return get_crc_check(ack, crc)
+    except Exception as e:
+        print("Received corrupted data, sending packet again.\n")
+        return BAD
 
 
 def build_packet(data, packet_counter):
@@ -49,12 +95,12 @@ def send_bytes(buffer, packet_counter, ):
     Sends the data with packet number and divider to TARGET_IP and TARGET_PORT.
     """
     packet = build_packet(buffer, packet_counter)
-    answer = 0
+    answer = BAD
 
-    while answer != 1:  # Tests for successfully received packet
+    while answer != GOOD:  # Tests for successfully received packet
         print("Sending packet " + str(int(packet_counter)) + " of size " + str(len(packet)) + ".")
         SOCK.sendto(packet, (TARGET_IP, TARGET_PORT))
-        answer = wait_for_answer()
+        answer = get_answer()
 
 
 def calculate_amount_of_packets(filename, buffer_length):
@@ -109,6 +155,6 @@ def send_file(file_name, buffer_length):
 
 if __name__ == "__main__":
     # file = "sample_640×426.bmp"
-    file = "inp/BIG.bmp"
+    file = "inp/small.bmp"
 
     send_file(file, BUFFER_LEN)

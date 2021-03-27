@@ -77,12 +77,12 @@ class Server:
                     print("Iteration was continued ")
                     continue
             else:
-                #print("Self count " + str(self.count) + " My count" + str(self.amount_of_packages))
+                print("Self count " + str(self.count) + " My count" + str(self.amount_of_packages))
                 if self.count == self.amount_of_packages:
-                    #print("GONNA CATCH HASH DATA")
+                    print("GONNA CATCH HASH DATA")
                     if self.check_packages(self.counter_from_sender) != 0 and self.control_crc(data) == True:
                         # print(data)
-                        #print("Got a hashcode from " + str(addr))
+                        print("Got a hashcode from " + str(addr))
                         hash_from_sender = get_hash_code(data)
                         print("Hash from sender: " + hash_from_sender)
                         print("My hash " + str(self.hash_code.hexdigest()))
@@ -91,7 +91,7 @@ class Server:
                     break
 
                 if self.check_packages(self.counter_from_sender) != 0 and self.control_crc(data) == True:
-                    #print("All data was concatenated with just data + \n")
+                    print("All data was concatenated with just data + \n")
                     self.hash_code.update(data)
                     self.all_data += data
 
@@ -135,7 +135,7 @@ class Server:
             i += 1
 
         self.counter_from_sender = int(num)
-        #print("Counter from sender is " + str(self.counter_from_sender))
+        print("Counter from sender is " + str(self.counter_from_sender))
         i += 1
         return data[i:]
 

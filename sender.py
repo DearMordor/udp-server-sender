@@ -1,5 +1,5 @@
 from socket import *
-from multiprocessing import Manager, Process
+from multiprocessing import Manager, Process, freeze_support
 from os import stat
 from zlib import crc32
 import hashlib
@@ -9,37 +9,32 @@ MIN_NUM_PACKETS = 3     # + filename | + number of packets | + hashcode
 TARGET_IP = "192.168.30.38"
 LOCAL_IP = "192.168.30.38"
 
-TARGET_PORT = 4024
+TARGET_PORT = 4023
 LOCAL_PORT = 7110
 BUFFER_LEN = 1012
 TIMEOUT = 1
 SEPARATOR = '|'
 
 SOCK = socket(family=AF_INET, type=SOCK_DGRAM)
+SOCK.bind((LOCAL_IP, LOCAL_PORT))
+SOCK.settimeout(TIMEOUT)
 
 
-def recv_with_return(return_list, my_socket):
-    """
-    Special function for returning the output of Process class.
-    """
-    return_list.append(my_socket.recvfrom(1))
-
-
-def wait_for_answer(answer):
+def wait_for_answer():
     """
     Waits for servers confirmation that the data have been received correctly.
     """
-    receiving = Process(target=recv_with_return, args=[answer, SOCK])
-    receiving.start()
-    receiving.join(timeout=TIMEOUT)
-    receiving.terminate()
+    try:
+        answer = SOCK.recvfrom(1)
+    except timeout:
+        answer = 0
 
-    if len(answer) == 0:
+    if answer == 0:
         print("Confirmation timeout.\n")
-        return 0
+        return answer
     else:
-        print("Received " + str(answer[0][0])[2] + " from address " + str(answer[0][1]) + ".\n")
-        return int(answer[0][0])
+        print("Received " + str(int(answer[0])) + " from address " + str(answer[1]) + ".\n")
+        return int(answer[0])
 
 
 def build_packet(data, packet_counter):
@@ -49,18 +44,17 @@ def build_packet(data, packet_counter):
     return (str(packet_counter) + SEPARATOR + str(crc32(data)) + SEPARATOR).encode() + data
 
 
-def send_bytes(buffer, packet_counter):
+def send_bytes(buffer, packet_counter, ):
     """
     Sends the data with packet number and divider to TARGET_IP and TARGET_PORT.
     """
     packet = build_packet(buffer, packet_counter)
-    answer_manager = Manager().list()
     answer = 0
 
-    while answer != 1:  # Waits for confirmation
+    while answer != 1:  # Tests for successfully received packet
         print("Sending packet " + str(int(packet_counter)) + " of size " + str(len(packet)) + ".")
         SOCK.sendto(packet, (TARGET_IP, TARGET_PORT))
-        answer = wait_for_answer(answer_manager)
+        answer = wait_for_answer()
 
 
 def calculate_amount_of_packets(filename, buffer_length):
@@ -94,7 +88,6 @@ def send_file(file_name, buffer_length):
     Opens and sends a file with given buffer length.
     """
     packet_counter = 1
-    SOCK.bind((LOCAL_IP, LOCAL_PORT))
     hash_code = hashlib.md5()
 
     with open(file_name, "rb") as f:
@@ -112,13 +105,10 @@ def send_file(file_name, buffer_length):
 
         send_bytes(str(hash_code.hexdigest()).encode(), packet_counter)
         print(hash_code.hexdigest())
-        #send_bytes("STOP".encode(), packet_counter)
 
 
 if __name__ == "__main__":
     # file = "sample_640×426.bmp"
-    file = "inp/speed.bmp"
+    file = "inp/BIG.bmp"
 
     send_file(file, BUFFER_LEN)
-
-# Test gitlab 2

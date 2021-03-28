@@ -15,7 +15,7 @@ GOOD = b"GOOD"
 # LOCAL_PORT = 4025
 
 # Normal
-TARGET_IP = "192.168.30.10"
+TARGET_IP = "192.168.30.38"
 LOCAL_IP = "192.168.30.38"
 
 TARGET_PORT = 4023
@@ -77,9 +77,10 @@ def get_answer():
         ack = answer[0][separator_idx + 1:]
         crc = int(answer[0][:separator_idx])
 
+        print(received_data)
         return get_crc_check(ack, crc)
     except Exception as e:
-        print("Received corrupted data, sending packet again.\n")
+        print("Received corrupted data, sending packet again.\n", e)
         return BAD
 
 
@@ -154,7 +155,11 @@ def send_file(file_name, buffer_length):
 
 
 if __name__ == "__main__":
-    # file = "sample_640×426.bmp"
+    # file = "inp/sample_640×426.bmp"
     file = "inp/small.bmp"
+    # file = "inp/BIG.bmp"
+    # file = "inp/test1.bmp"
+
+
 
     send_file(file, BUFFER_LEN)

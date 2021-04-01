@@ -59,7 +59,6 @@ class Server:
     def check_packages(self):
         """Checks a current count from sender and compares with local count"""
         if self.counter_from_sender == self.count:
-            print("Counters are the same")
             return 1
         else:
             if self.counter_from_sender < self.count:
@@ -103,27 +102,8 @@ class Server:
                     self.count += 1
             else:
                 print("Self count " + str(self.count) + " Sender's amount_of_packages " + str(self.amount_of_packages))
-                if self.count == self.amount_of_packages and self.check_packages_and_crc(data):
-                    hash_from_sender = get_hash_code(data)
-
-                    print("Hash from sender: " + hash_from_sender)
-                    print("My hash " + str(self.hash_code.hexdigest()))
-
-                    self.compare_hash_codes(hash_from_sender, data)
-
+                self.compare_hash_codes(data)
                 self.concatenate_data_update_hash(data)
-                # if self.check_packages_and_crc(data) and self.count < self.amount_of_packages:
-                #     print("All data was concatenated with just data\n")
-                #     # if self.count == 1000:  # 1000 is number of paket. It implemented to not make string too big
-                #     #     f.write(self.all_data)
-                #     #     self.all_data = b''
-                #     self.hash_code.update(data)
-                #     self.all_data += data
-                #     self.send_success()
-                #     if self.count <= self.amount_of_packages:
-                #         self.count += 1
-                # else:
-                #     self.send_success_or_error()
 
         # f.close()
         print(self.filename + " was created!")
@@ -202,14 +182,14 @@ class Server:
 
         return data[index:]
 
-    def compare_hash_codes(self, hash_code_from_sender, data):
+    def compare_hash_codes(self, data):
         if self.count == self.amount_of_packages and self.check_packages_and_crc(data):
             hash_from_sender = get_hash_code(data)
 
             print("Hash from sender: " + hash_from_sender)
             print("My hash " + str(self.hash_code.hexdigest()))
 
-            if hash_code_from_sender == self.hash_code.hexdigest():
+            if hash_from_sender == self.hash_code.hexdigest():
                 print("Hash codes are equal!")
                 self.send_success()
                 self.count += 1

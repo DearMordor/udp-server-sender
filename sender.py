@@ -1,7 +1,6 @@
 from socket import *
 from os import stat
 from zlib import crc32
-from time import sleep
 import hashlib
 
 MIN_NUM_PACKETS = 3  # + filename | + number of packets | + hashcode
@@ -12,35 +11,23 @@ BUFFER_LEN = 1012
 TIMEOUT = 0.3
 
 # NetDerper
-TARGET_IP = "192.168.30.38"
-LOCAL_IP = "192.168.30.38"
-
-TARGET_PORT = 4024
-LOCAL_PORT = 4025
-
-# Normal
-# TARGET_IP = "192.168.30.15"
+# TARGET_IP = "192.168.30.38"
 # LOCAL_IP = "192.168.30.38"
 #
-# TARGET_PORT = 4023
-# LOCAL_PORT = 7110
+# TARGET_PORT = 4024
+# LOCAL_PORT = 4025
 
+# Normal
+TARGET_IP = "192.168.30.15"
+LOCAL_IP = "192.168.30.38"
+
+TARGET_PORT = 4023
+LOCAL_PORT = 7110
 
 SOCK = socket(family=AF_INET, type=SOCK_DGRAM)
 SOCK.bind((LOCAL_IP, LOCAL_PORT))
 SOCK.settimeout(TIMEOUT)
 
-
-def get_separator_index(data):
-    """
-    Goes through data and returns the index of the SEPARATOR.
-    """
-    iterator = 0
-    for char in data:
-        if char == SEPARATOR:
-            break
-        iterator += 1
-    return iterator
 
 
 def check_answer(num, acknowledgement, packet_counter):
@@ -71,12 +58,11 @@ def get_answer(packet_counter):
 
     # Tries to decode data to get the acknowledgement
     try:
-        received_data = answer[0].decode()
-        separator_idx = get_separator_index(received_data)
-        num = int(answer[0][:separator_idx])
-        ack = answer[0][separator_idx + 1:]
+        #separator_idx = len(str(packet_counter))
+        #num = int(answer[0][:separator_idx])
+        #ack = answer[0][separator_idx + 1:]
 
-        return check_answer(num, ack, packet_counter)
+        return check_answer(packet_counter, answer[0], packet_counter)
     except Exception as e:
         print("Received corrupted data, sending packet again.")
         return BAD
@@ -135,8 +121,6 @@ def send_file(file_name, buffer_length):
     packet_counter = 1
     hash_code = hashlib.md5()
 
-    sleep(1)
-
     with open(file_name, "rb") as f:
         print("Sending file " + file_name + " to address " + TARGET_IP + ":" + str(TARGET_PORT))
 
@@ -150,14 +134,15 @@ def send_file(file_name, buffer_length):
             packet_counter += 1
             buffer = f.read(buffer_length - len(str(packet_counter)))
 
+        print("\nSending Hash:")
         send_bytes(str(hash_code.hexdigest()).encode(), packet_counter)
         print("\nFile has been sent!")
 
 
 if __name__ == "__main__":
-    file = "inp/small.bmp"
+    # file = "inp/small.bmp"
     # file = "inp/sample_640×426.bmp"
-    # file = "inp/test1.bmp"
+    file = "inp/test1.bmp"
     # file = "inp/BIG.bmp"
 
     send_file(file, BUFFER_LEN)

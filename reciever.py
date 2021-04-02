@@ -125,7 +125,7 @@ class Server:
     def make_file(self):
         with open("out/" + self.filename, "wb") as f:
             f.write(self.all_data)
-        print("File was created! ")
+        print("File was created!")
 
     def close_socket(self):
         self.udp_server_socket.close()
@@ -187,7 +187,7 @@ class Server:
             hash_from_sender = get_hash_code(data)
 
             print("Hash from sender: " + hash_from_sender)
-            print("My hash " + str(self.hash_code.hexdigest()))
+            print("My hash:          " + str(self.hash_code.hexdigest()))
 
             if hash_from_sender == self.hash_code.hexdigest():
                 print("Hash codes are equal!")
@@ -197,11 +197,9 @@ class Server:
                 self.send_error()
 
     def check_packages_and_crc(self, data):
-
         if self.check_packages() == 1 and self.control_crc(data):
             return True
         else:
-
             if self.counter_from_sender < self.count:
                 return False
 
@@ -221,9 +219,8 @@ class Server:
                 print('received from: ', addr, 'data: package_' + str(self.count))
                 return data
             except socket.timeout:
-                print("Confirmation timeout")
+                print("Sender received success confirmation. Listener function ended\n")
                 self.isEnd = True
-
         else:
             data, addr = self.udp_server_socket.recvfrom(self.buffer_size)
 
@@ -232,13 +229,14 @@ class Server:
 
     def concatenate_data_update_hash(self, data):
         if self.check_packages_and_crc(data) and self.count < self.amount_of_packages:
-            print("All data was concatenated with just data\n")
+            print("Packet was successfully received")
             # if self.count == 1000:  # 1000 is number of paket. It implemented to not make string too big
             #     f.write(self.all_data)
             #     self.all_data = b''
             self.hash_code.update(data)
             self.all_data += data
             self.send_success()
+
             if self.count <= self.amount_of_packages:
                 self.count += 1
         else:

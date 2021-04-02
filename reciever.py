@@ -1,6 +1,6 @@
-import hashlib
-import socket
-import zlib
+from hashlib import md5
+from socket import socket, AF_INET, SOCK_DGRAM, SOL_SOCKET, SO_REUSEADDR, timeout
+from zlib import crc32
 
 localIP = "192.168.30.15"
 targetIP = "192.168.30.38"
@@ -19,6 +19,8 @@ def get_hash_code(data):
 
 def while_loop_for_data_parse(data, index, number):
     while data[index] != CHARACTER:
+        if index > 50:
+            break
         number += chr(data[index])
         index += 1
 
@@ -41,18 +43,19 @@ class Server:
         self.port = port
         self.buffer_size = buffer_size
         self.filename = ''
-        self.udp_server_socket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+        self.udp_server_socket = socket(family=AF_INET, type=SOCK_DGRAM)
         self.count = 1
         self.all_data = b''
         self.amount_of_packages = 0
         self.counter_from_sender = 0
         self.crc32 = 0
-        self.hash_code = hashlib.md5()
+        self.hash_code = md5()
         self.isEnd = False
+        self.f = None
 
     def bind_server(self):
         """Binds server with sender via sockets"""
-        self.udp_server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.udp_server_socket.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         self.udp_server_socket.bind((self.ip_address, self.port))
         print("Server runs and listens!")
 
@@ -70,7 +73,7 @@ class Server:
             return 0
 
     def listener(self):
-        """Main function listens to data from sender"""
+        """Main function listens to data from sender. It also writes the file"""
         while not self.isEnd:
             data = self.get_data_and_addr_from_sender()
             data = self.parse_data(data)
@@ -83,29 +86,36 @@ class Server:
                 self.get_filename(data)
 
                 if not self.check_packages_and_crc(data):
-                    print("Iteration was continued ")
+                    print("Iteration was continued")
                     self.send_success_or_error()
                     continue
                 else:
                     self.send_success()
+                    self.f = open("out/" + self.filename, "wb")
                     self.count += 1
 
             elif self.count == 2:  # At second we do the same, but with file's size ( amount of packages)
                 self.get_size(data)
 
                 if not self.check_packages_and_crc(data):
-                    print("Iteration was continued ")
+                    print("Iteration was continued")
                     self.send_success_or_error()
                     continue
                 else:
                     self.send_success()
                     self.count += 1
             else:
-                print("Self count " + str(self.count) + " Sender's amount_of_packages " + str(self.amount_of_packages))
+                print("Server's count " + str(self.count) + " Sender's amount_of_packages " +
+                      str(self.amount_of_packages))
                 self.compare_hash_codes(data)
                 self.concatenate_data_update_hash(data)
 
-        # f.close()
+        if self.count % 300 == 0:
+            self.f.close()
+        else:
+            self.f.write(self.all_data)
+            self.f.close()
+
         print(self.filename + " was created!")
 
     def get_filename(self, data):
@@ -154,8 +164,7 @@ class Server:
 
     def control_crc(self, data):
         try:
-            self.crc32 = int(self.crc32)
-            return self.crc32 == zlib.crc32(data)
+            return int(self.crc32) == crc32(data)
         except Exception as e:
             print("Error with crc!", e)
             return False
@@ -197,6 +206,7 @@ class Server:
                 self.send_error()
 
     def check_packages_and_crc(self, data):
+        """It checks if servers' counter equals to counter from sender"""
         if self.check_packages() == 1 and self.control_crc(data):
             return True
         else:
@@ -212,13 +222,14 @@ class Server:
             self.send_error()
 
     def get_data_and_addr_from_sender(self):
+        """It receives tuple (data, address) from sender"""
         if self.count >= self.amount_of_packages:
             try:
                 data, addr = self.udp_server_socket.recvfrom(self.buffer_size)
                 self.udp_server_socket.settimeout(TIMEOUT)
                 print('received from: ', addr, 'data: package_' + str(self.count))
                 return data
-            except socket.timeout:
+            except timeout:
                 print("Sender received success confirmation. Listener function ended\n")
                 self.isEnd = True
         else:
@@ -228,13 +239,17 @@ class Server:
             return data
 
     def concatenate_data_update_hash(self, data):
+        """It concatenates data from sender and writes it in file"""
         if self.check_packages_and_crc(data) and self.count < self.amount_of_packages:
             print("Packet was successfully received")
-            # if self.count == 1000:  # 1000 is number of paket. It implemented to not make string too big
-            #     f.write(self.all_data)
-            #     self.all_data = b''
+            if self.count == 300:  # 1000 is number of paket. It implemented to not make string too big
+                self.f.write(self.all_data)
+                self.all_data = b''
+
             self.hash_code.update(data)
-            self.all_data += data
+            # self.f.write(data)
+            # self.all_data += data
+            self.all_data = b''.join([self.all_data, data])
             self.send_success()
 
             if self.count <= self.amount_of_packages:
@@ -249,5 +264,5 @@ my_server = Server(localIP, localPort, bufferSize)
 my_server.bind_server()
 
 my_server.listener()
-my_server.make_file()
+# my_server.make_file()
 my_server.close_socket()

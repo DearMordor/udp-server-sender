@@ -2,7 +2,7 @@ from hashlib import md5
 from socket import socket, AF_INET, SOCK_DGRAM, SOL_SOCKET, SO_REUSEADDR, timeout
 from zlib import crc32
 
-localIP = "192.168.30.15"
+localIP = "192.168.30.38"
 targetIP = "192.168.30.38"
 
 localPort = 4023

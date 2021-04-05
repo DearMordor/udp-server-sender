@@ -2,7 +2,7 @@ from socket import socket, AF_INET, SOCK_DGRAM, timeout
 from os import stat
 from zlib import crc32
 from hashlib import md5
-import time
+from time import time
 
 MIN_NUM_PACKETS = 3  # + filename | + number of packets | + hashcode
 BAD = b"BAD"
@@ -13,14 +13,14 @@ TIMEOUT = 0.3
 DEFAULT_RESPONSE_LEN = 30
 
 # NetDerper
-TARGET_IP = "192.168.30.38"
-LOCAL_IP = "192.168.30.38"
+TARGET_IP = "127.0.0.1"
+LOCAL_IP = "127.0.0.1"
 
 TARGET_PORT = 4024
 LOCAL_PORT = 4025
 
 # Normal
-# TARGET_IP = "192.168.30.15"
+# TARGET_IP = "192.168.30.12"
 # LOCAL_IP = "192.168.30.38"
 #
 # TARGET_PORT = 4023
@@ -52,7 +52,7 @@ def get_answer(packet_counter):
     """
     # Waits for a response
     try:
-        answer = SOCK.recvfrom(DEFAULT_RESPONSE_LEN)
+        answer = SOCK.recv(DEFAULT_RESPONSE_LEN)
     except timeout:
         print("Confirmation timeout, sending packet again.")
         return BAD
@@ -60,8 +60,8 @@ def get_answer(packet_counter):
     # Tries to decode data to get the acknowledgement
     try:
         separator_idx = len(str(packet_counter))
-        num = int(answer[0][:separator_idx])
-        ack = answer[0][separator_idx + 1:]
+        num = int(answer[:separator_idx])
+        ack = answer[separator_idx + 1:]
 
         return check_answer(num, ack, packet_counter)
     except Exception:
@@ -141,16 +141,15 @@ def send_file(file_name, buffer_length):
 
 
 if __name__ == "__main__":
-    file = "inp/small.bmp"
-    # file = "inp/sample_640×426.bmp"
+    # file = "inp/small.bmp"
+    file = "inp/sample_640×426.bmp"
     # file = "inp/test1.bmp"
+    # file = "inp/udp-packet.png"
+    # file = "inp/test2.txt"
     # file = "inp/BIG.bmp"
 
-    start = time.time()
+    start = time()
     send_file(file, BUFFER_LEN)
-    end = time.time()
+    end = time()
 
     print(end - start)
-
-    # Join, 300 packet buffer - 176.43 sec (test1.bmp)
-

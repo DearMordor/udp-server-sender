@@ -2,15 +2,22 @@ from hashlib import md5
 from socket import socket, AF_INET, SOCK_DGRAM, SOL_SOCKET, SO_REUSEADDR, timeout
 from zlib import crc32
 
-localIP = "192.168.30.38"
-targetIP = "192.168.30.38"
-
+localIP = "192.168.30.31"
+targetIP = "192.168.30.10"
+log = open("log.txt", "w")
 localPort = 4023
 targetPort = 7110
 
 bufferSize = 1024
 CHARACTER = 124
-TIMEOUT = 5
+WINDOW_SIZE = 10
+DATA_DICT_SIZE = 32
+TIMEOUT = 10
+LITTLE_TIMEOUT = 3
+data_dict = {}  # Contains all data received from sender
+confirm_arr = {}  # Contains all ARC
+log_dict = []
+history_dict = []
 
 
 def get_hash_code(data):
@@ -18,9 +25,8 @@ def get_hash_code(data):
 
 
 def while_loop_for_data_parse(data, index, number):
+    """Simple while loop to get crucial info like a package number or crc32"""
     while data[index] != CHARACTER:
-        if index > 50:
-            break
         number += chr(data[index])
         index += 1
 
@@ -47,78 +53,60 @@ class Server:
         self.count = 1
         self.all_data = b''
         self.amount_of_packages = 0
-        self.counter_from_sender = 0
-        self.crc32 = 0
+        self.counter_from_sender = 0  # Counter from sender is number of package
+        self.crc32_from_sender = 0
         self.hash_code = md5()
         self.isEnd = False
         self.f = None
+        self.is_closed = False
+        self.num_before = 1
 
     def bind_server(self):
-        """Binds server with sender via sockets"""
+        """
+        Binds server with sender via sockets
+        """
         self.udp_server_socket.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         self.udp_server_socket.bind((self.ip_address, self.port))
         print("Server runs and listens!")
 
-    def check_packages(self):
-        """Checks a current count from sender and compares with local count"""
-        if self.counter_from_sender == self.count:
-            return 1
-        else:
-            if self.counter_from_sender < self.count:
-                return 0
-
-            if self.count < 0:
-                self.count = 0
-
-            return 0
-
     def listener(self):
-        """Main function listens to data from sender. It also writes the file"""
+        """
+        Main function listens to data from sender. It also writes the file
+        """
+
         while not self.isEnd:
             data = self.get_data_and_addr_from_sender()
             data = self.parse_data(data)
+            print(self.count)
+            print("Sender's count: " + str(self.counter_from_sender) +
+                  " Sender's amount_of_packages: " + str(self.amount_of_packages))
 
-            if data is None:
-                self.send_error()
-                continue
+            self.concatenate_data_and_update_hash(data)
 
-            if self.count == 1:  # At first iteration we get the filename. If not, continue ask receiver
-                self.get_filename(data)
+            if len(confirm_arr) == 10:
+                self.send_confirmations()
+                confirm_arr.clear()
+                print("Confirm array was cleaned")
+            elif self.counter_from_sender == self.amount_of_packages:
+                self.send_confirmations()
 
-                if not self.check_packages_and_crc(data):
-                    print("Iteration was continued")
-                    self.send_success_or_error()
-                    continue
+            if self.counter_from_sender == self.amount_of_packages:
+                if len(data_dict) % DATA_DICT_SIZE == 0:
+                    self.close_file()
+                    self.is_closed = True
                 else:
-                    self.send_success()
-                    self.f = open("out/" + self.filename, "wb")
-                    self.count += 1
+                    self.write_file()
+                    self.close_file()
+                    self.is_closed = True
 
-            elif self.count == 2:  # At second we do the same, but with file's size ( amount of packages)
-                self.get_size(data)
-
-                if not self.check_packages_and_crc(data):
-                    print("Iteration was continued")
-                    self.send_success_or_error()
-                    continue
-                else:
-                    self.send_success()
-                    self.count += 1
-            else:
-                print("Server's count " + str(self.count) + " Sender's amount_of_packages " +
-                      str(self.amount_of_packages))
-                self.compare_hash_codes(data)
-                self.concatenate_data_update_hash(data)
-
-        if self.count % 300 == 0:
-            self.f.close()
-        else:
-            self.f.write(self.all_data)
-            self.f.close()
+            self.compare_hash_codes(data)
 
         print(self.filename + " was created!")
 
     def get_filename(self, data):
+        """
+        Decode filename from byte data
+        """
         try:
             self.filename = data.decode("utf-8")
             print("Filename got success: " + self.filename)
@@ -126,6 +114,9 @@ class Server:
             print("Error with filename decoding! ", e)
 
     def get_size(self, data):
+        """
+        Decode file's size from byte data
+        """
         try:
             self.amount_of_packages = int(data.decode("utf-8"))
             print("Size got success: " + str(self.amount_of_packages))
@@ -144,32 +135,40 @@ class Server:
         self.udp_server_socket.sendto(data, (targetIP, targetPort))
 
     def send_error(self):
-        msg = str(self.counter_from_sender) + "|" + "BAD"
-        self.send_bytes(msg.encode())
-        print("Error was sent to the client\n")
+        msg = str(self.counter_from_sender) + "|" + str(crc32(str(self.counter_from_sender).encode())) + "|" + "BAD"
+        confirm_arr[self.counter_from_sender] = msg.encode()
+        # self.send_bytes(msg.encode())
+        print("BAD was added to array\n")
 
     def send_success(self):
-        msg = str(self.counter_from_sender) + "|" + "GOOD"
-        self.send_bytes(msg.encode())
-        print("Success was sent to the client\n")
+        msg = str(self.counter_from_sender) + "|" + str(crc32(str(self.counter_from_sender).encode())) + "|" + "GOOD"
+        confirm_arr[self.counter_from_sender] = msg.encode()
+        # self.send_bytes(msg.encode())
+        print("GOOD was added to array\n")
 
     def parse_data(self, data):
         """Reads input data up to char '|' then return data without chars before the char '|' """
         try:
             data = self.get_package_counter_from_sender(data)
-            return self.get_src_from_sender(data)
+            return self.get_crc32_from_sender(data)
         except Exception as e:
             print("Error with parsing data ", e)
             return None
 
     def control_crc(self, data):
+        """Control crc32 received from sender with my crc32"""
         try:
-            return int(self.crc32) == crc32(data)
+            if int(self.crc32_from_sender) == crc32(str(self.counter_from_sender).encode() + data):
+                print("Crc is fine")
+
+            return int(self.crc32_from_sender) == crc32(str(self.counter_from_sender).encode() + data)
         except Exception as e:
             print("Error with crc!", e)
+
             return False
 
     def get_package_counter_from_sender(self, data):
+        """Gets package counter from sender"""
         index = 0
         num = ""
 
@@ -180,82 +179,149 @@ class Server:
 
         return data[index:]
 
-    def get_src_from_sender(self, data):
+    def get_crc32_from_sender(self, data):
+        """Gets crc32 from sender"""
         index = 0
         crc = ""
 
         data, index, crc = while_loop_for_data_parse(data, index, crc)
 
-        self.crc32 = int(crc)
+        self.crc32_from_sender = int(crc)
         index = increase_index(index)
 
         return data[index:]
 
     def compare_hash_codes(self, data):
-        if self.count == self.amount_of_packages and self.check_packages_and_crc(data):
+        """Compares sender's sent hash vs my generated hash"""
+        print("self.counter from sender == self.amount_of_packages")
+
+        print(self.counter_from_sender, self.amount_of_packages)
+        if self.counter_from_sender == self.amount_of_packages and self.control_crc(data):
             hash_from_sender = get_hash_code(data)
 
             print("Hash from sender: " + hash_from_sender)
             print("My hash:          " + str(self.hash_code.hexdigest()))
-
             if hash_from_sender == self.hash_code.hexdigest():
                 print("Hash codes are equal!")
+
                 self.send_success()
-                self.count += 1
             else:
                 self.send_error()
 
-    def check_packages_and_crc(self, data):
+    def check_package_and_crc(self, data):
         """It checks if servers' counter equals to counter from sender"""
-        if self.check_packages() == 1 and self.control_crc(data):
+        if self.control_crc(data):  # self.check_packages() == 1 and
             return True
         else:
             if self.counter_from_sender < self.count:
-                return False
+                return True
 
             return False
 
-    def send_success_or_error(self):
-        if self.counter_from_sender < self.count:
-            self.send_success()
-        else:
-            self.send_error()
-
     def get_data_and_addr_from_sender(self):
-        """It receives tuple (data, address) from sender"""
-        if self.count >= self.amount_of_packages:
+        """
+        It receives tuple (data, address) from sender. Where data is a package.
+        """
+        if self.counter_from_sender == self.amount_of_packages:
             try:
                 data, addr = self.udp_server_socket.recvfrom(self.buffer_size)
-                self.udp_server_socket.settimeout(TIMEOUT)
+                self.udp_server_socket.settimeout(TIMEOUT)  # Remove timeout
+                print("----------------------------------------------------------")
                 print('received from: ', addr, 'data: package_' + str(self.count))
+                print(data)
                 return data
             except timeout:
                 print("Sender received success confirmation. Listener function ended\n")
+
                 self.isEnd = True
         else:
+            # try:
             data, addr = self.udp_server_socket.recvfrom(self.buffer_size)
-
-            print('received from: ', addr, 'data: package_' + str(self.count))
+            # self.udp_server_socket.settimeout(LITTLE_TIMEOUT)  # Remove timeout
+            print("----------------------------------------------------------")
+            print('received from: ', addr, 'data: package_' + str(self.counter_from_sender))
+            print()
             return data
+            # except timeout:
+            #     print("Confirm array: " + str(len(confirm_arr)))
 
-    def concatenate_data_update_hash(self, data):
-        """It concatenates data from sender and writes it in file"""
-        if self.check_packages_and_crc(data) and self.count < self.amount_of_packages:
-            print("Packet was successfully received")
-            if self.count == 300:  # 1000 is number of paket. It implemented to not make string too big
-                self.f.write(self.all_data)
-                self.all_data = b''
+    def concatenate_data_and_update_hash(self, data):
+        """
+        It concatenates data from sender and writes it in file
+        """
+        if self.control_crc(data):  # self.count < self.amount_of_packages
+            if self.counter_from_sender < self.count and self.control_crc(data):
+                print(str(self.counter_from_sender) + " Was inserted")
+                data_dict[self.counter_from_sender] = data
+                self.send_success()
+            else:
+                print("Packet was received")
 
-            self.hash_code.update(data)
-            # self.f.write(data)
-            # self.all_data += data
-            self.all_data = b''.join([self.all_data, data])
-            self.send_success()
+                if len(data_dict) == DATA_DICT_SIZE:
+                    # write file
+                    self.write_file()
+                    data_dict.clear()
+                    print("All data array was cleaned")
 
-            if self.count <= self.amount_of_packages:
+                # self.hash_code.update(data)
+                # (str(self.counter_from_sender).encode() + '|'.encode() + data)]
+                print("Counter from sender before data_dict: " + str(self.counter_from_sender))
+                data_dict[self.counter_from_sender] = data
+                print("Data was appended")
+                print(data)
+                print("All data array: " + str(len(data_dict)))
+
+                self.send_success()
                 self.count += 1
         else:
-            self.send_success_or_error()
+            self.send_error()
+
+    def write_file(self):
+        # Tests var:
+        print("BEFORE DATA WRITE LOOP:")
+
+        print(data_dict.keys())
+        # sorted_data_dict = {k: data_dict[k] for k in sorted(data_dict, key=data_dict.get)}
+        print(sorted(data_dict))
+        for package_number in sorted(data_dict):
+            data = data_dict[package_number]
+            print("Got package number " + str(package_number))
+            if self.num_before < package_number:
+                log_dict.append(self.num_before)
+            if package_number == 1:
+                self.get_filename(data)
+                self.f = open("out/" + self.filename, "wb")
+            elif package_number == 2:
+                self.get_size(data)
+            else:
+                if package_number != self.amount_of_packages and not self.is_closed:
+
+                    if len(history_dict) == 40:
+                        history_dict.clear()
+
+                    if package_number not in history_dict:
+                        print("Written data: ", end='')
+                        print(data)
+                        self.f.write(data)
+                        self.hash_code.update(data)
+                        history_dict.append(package_number)
+                    else:
+                        print(str(package_number) + " Was prevented")
+
+            self.num_before += 1
+
+    def send_confirmations(self):
+        """
+        Send data confirmations in a row of WINDOW_SIZE
+        """
+        # sorted_confirm_arr = {k: confirm_arr[k] for k in sorted(confirm_arr, key=confirm_arr.get)}
+
+        for conf in sorted(confirm_arr):
+            print(confirm_arr[conf])
+            self.send_bytes(confirm_arr[conf])
+
+    def close_file(self):
+        self.f.close()
 
 
 # Start
@@ -266,3 +332,5 @@ my_server.bind_server()
 my_server.listener()
 # my_server.make_file()
 my_server.close_socket()
+log.close()
+print(log_dict)
